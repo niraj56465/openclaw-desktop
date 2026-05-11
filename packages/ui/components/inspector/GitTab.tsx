@@ -361,13 +361,13 @@ export function GitTab({ projectId }: { projectId: string | null }) {
 
       {/* Commit history */}
       {commits.length > 0 && (
-        <div className={cn("border-t border-border/30", historyExpanded ? "py-3" : "")}>
+        <div className={cn("border bg-gray-500 bg-opacity-25 rounded-md mx-4 mt-2", historyExpanded ? "py-3" : "")}>
           <button
             type="button"
             onClick={() => setHistoryExpanded((v) => !v)}
-            className="flex w-full items-center justify-between px-4 py-2 text-left transition-colors hover:bg-secondary/30"
+            className="flex w-full items-center justify-between px-4 py-2 text-left"
           >
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-left opacity-70">
               Recent history
             </span>
             <LuChevronDown className={cn("size-3.5 text-muted-foreground transition-transform", historyExpanded ? "rotate-180" : "")} />
