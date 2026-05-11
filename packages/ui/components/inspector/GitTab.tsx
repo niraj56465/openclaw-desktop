@@ -33,6 +33,7 @@ export function GitTab({ projectId }: { projectId: string | null }) {
   const [branchDropdown, setBranchDropdown] = useState(false)
   const [switching, setSwitching] = useState(false)
   const [repoPickerOpen, setRepoPickerOpen] = useState(false)
+  const [historyExpanded, setHistoryExpanded] = useState(true)
   const [selectedCommit, setSelectedCommit] = useState<{ hash: string; message: string } | null>(null)
   const [selectedChangedFile, setSelectedChangedFile] = useState<GitFile | null>(null)
   const effectiveProjectId = projectId ?? pickedProjectId ?? null
@@ -355,47 +356,59 @@ export function GitTab({ projectId }: { projectId: string | null }) {
 
       {files.length > 0 && commits.length > 0 && <div className="h-4" />}
 
+      {/* Spacer pushes history header to bottom when collapsed */}
+      {commits.length > 0 && !historyExpanded && <div className="flex-1" />}
+
       {/* Commit history */}
       {commits.length > 0 && (
-        <div className="py-3">
-          <p className="mb-2 px-4 text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70">
-            Recent history
-          </p>
-          <div className="flex flex-col">
-            {commits.map((commit, i) => (
-              <div
-                key={`${commit.hash}-${i}`}
-                className="group flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-secondary/40 active:bg-secondary/60"
-                onClick={() => setSelectedCommit({ hash: commit.hash, message: commit.message })}
-              >
-                <div className="relative mt-1 flex flex-col items-center shrink-0">
-                  <VscGitCommit className="size-3.5 text-muted-foreground/40 group-hover:text-primary transition-colors" />
-                  {i < commits.length - 1 && (
-                    <div className="absolute top-4 w-px bg-border/20" style={{ height: "calc(100% + 12px)" }} />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="truncate text-[12px] font-medium text-foreground/90 group-hover:text-foreground transition-colors">
-                      {commit.message}
-                    </p>
-                    <div className="flex items-center gap-1.5 font-mono text-[9px] whitespace-nowrap">
-                      <span className="text-emerald-500 font-bold">+{commit.additions || 0}</span>
-                      <span className="text-red-500 font-bold">-{commit.deletions || 0}</span>
+        <div className={cn("border-t border-border/30", historyExpanded ? "py-3" : "")}>
+          <button
+            type="button"
+            onClick={() => setHistoryExpanded((v) => !v)}
+            className="flex w-full items-center justify-between px-4 py-2 text-left transition-colors hover:bg-secondary/30"
+          >
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70">
+              Recent history
+            </span>
+            <LuChevronDown className={cn("size-3.5 text-muted-foreground transition-transform", historyExpanded ? "rotate-180" : "")} />
+          </button>
+          {historyExpanded && (
+            <div className="flex flex-col">
+              {commits.map((commit, i) => (
+                <div
+                  key={`${commit.hash}-${i}`}
+                  className="group flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors hover:bg-secondary/40 active:bg-secondary/60"
+                  onClick={() => setSelectedCommit({ hash: commit.hash, message: commit.message })}
+                >
+                  <div className="relative mt-1 flex flex-col items-center shrink-0">
+                    <VscGitCommit className="size-3.5 text-muted-foreground/40 group-hover:text-primary transition-colors" />
+                    {i < commits.length - 1 && (
+                      <div className="absolute top-4 w-px bg-border/20" style={{ height: "calc(100% + 12px)" }} />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="truncate text-[12px] font-medium text-foreground/90 group-hover:text-foreground transition-colors">
+                        {commit.message}
+                      </p>
+                      <div className="flex items-center gap-1.5 font-mono text-[9px] whitespace-nowrap">
+                        <span className="text-emerald-500 font-bold">+{commit.additions || 0}</span>
+                        <span className="text-red-500 font-bold">-{commit.deletions || 0}</span>
+                      </div>
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2">
+                      <code className="text-[10px] text-muted-foreground/30 tabular-nums">
+                        {commit.shortHash || commit.hash.substring(0, 7)}
+                      </code>
+                      <span className="text-[10px] text-muted-foreground/30 italic">
+                        {commit.date}
+                      </span>
                     </div>
                   </div>
-                  <div className="mt-0.5 flex items-center gap-2">
-                    <code className="text-[10px] text-muted-foreground/30 tabular-nums">
-                      {commit.shortHash || commit.hash.substring(0, 7)}
-                    </code>
-                    <span className="text-[10px] text-muted-foreground/30 italic">
-                      {commit.date}
-                    </span>
-                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
