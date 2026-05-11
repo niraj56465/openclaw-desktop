@@ -462,7 +462,16 @@ export function createApp(config: MiddlewareConfig, injectedStore?: Store) {
     }
   })
 
-  app.use((req, _res, next) => next(new HttpError(404, `Route not found: ${req.method} ${req.path}`, "NOT_FOUND")))
+  // Serve static UI from packages/ui/out
+  const uiOutDir = path.resolve(import.meta.dirname ?? __dirname, "..", "..", "..", "packages", "ui", "out")
+  if (fs.existsSync(uiOutDir)) {
+    app.use(express.static(uiOutDir))
+    app.use((_req, res) => {
+      res.sendFile(path.join(uiOutDir, "index.html"))
+    })
+  } else {
+    app.use((req, _res, next) => next(new HttpError(404, `Route not found: ${req.method} ${req.path}`, "NOT_FOUND")))
+  }
 
   app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     const status = error instanceof HttpError ? error.status : 500
