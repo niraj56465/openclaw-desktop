@@ -887,7 +887,19 @@ export function ChatView({
           return
         }
 
-        if (isGenerating || distanceFromBottom < 260) {
+        if (isGenerating) {
+          // During streaming, only auto-scroll if the user hasn't scrolled up.
+          // Once the user scrolls away from the bottom, stop pulling them back.
+          if (!isAtBottom) return
+          if (distanceFromBottom < 80) {
+            el.scrollTo({ top: el.scrollHeight, behavior: "auto" })
+            return
+          }
+          jumpToBottom()
+          return
+        }
+
+        if (distanceFromBottom < 260) {
           if (distanceFromBottom < 80) {
             el.scrollTo({ top: el.scrollHeight, behavior: "auto" })
             return
@@ -903,7 +915,7 @@ export function ChatView({
       if (frame !== null) cancelAnimationFrame(frame)
       observer.disconnect()
     }
-  }, [isSending, isGenerating, scrollContainerRef, jumpToBottom])
+  }, [isSending, isGenerating, isAtBottom, scrollContainerRef, jumpToBottom])
 
   const handleFeedbackSubmit = useCallback(
     (feedback: { tags: string[]; details: string }) => {
