@@ -8,6 +8,7 @@ import type {
 } from "../components/ChatView/types"
 import { extractText } from "../components/ChatView/utils"
 import { extractSubagentSessionKey, extractSubagentSessionKeys } from "./subagentSession"
+import { mergeAssistantText } from "./chatMessageDedupe"
 
 const BLOCKQUOTE_RE = /^((?:>[^\n]*(?:\n|$))+)\n([\s\S]+)$/
 
@@ -132,6 +133,12 @@ function rawTimestampMs(raw: RawHistoryMessage): number | null {
     if (Number.isFinite(parsed)) return parsed
   }
   return null
+}
+
+function createdAtIso(raw: RawHistoryMessage): string | undefined {
+  if (raw.createdAt) return raw.createdAt
+  const ts = rawTimestampMs(raw)
+  return ts !== null ? new Date(ts).toISOString() : undefined
 }
 
 function formatDuration(ms: number): string | undefined {
@@ -274,8 +281,7 @@ export function isAbortedGatewayArtifact(message: RawHistoryMessage) {
   const text = visibleMessageText(message).toLowerCase()
   return (
     text.includes("aborted") ||
-    text.includes("operation was aborted") ||
-    text.includes("agent failed before reply")
+    text.includes("operation was aborted")
   )
 }
 
@@ -336,6 +342,10 @@ export function parseChatHistory(raw: RawHistoryMessage[]): ParsedChatHistory {
   const subagents: SpawnedSubagent[] = []
   let pendingToolCalls: InlineToolCall[] = []
   let resultQueue: Array<InlineToolCall & { startedAtMs?: number | null }> = []
+  const pendingToolById = new Map<
+    string,
+    InlineToolCall & { startedAtMs?: number | null }
+  >()
   const subagentByToolId = new Map<
     string,
     SpawnedSubagent & { terminal?: boolean }
@@ -365,7 +375,7 @@ export function parseChatHistory(raw: RawHistoryMessage[]): ParsedChatHistory {
           messageId: messageId(item),
           role: "user",
           text: reply ? reply.displayText : text,
-          createdAt: item.createdAt,
+          createdAt: createdAtIso(item),
           model: item.model,
           usage: item.usage,
           stopReason: item.stopReason,
@@ -374,6 +384,7 @@ export function parseChatHistory(raw: RawHistoryMessage[]): ParsedChatHistory {
       }
       pendingToolCalls = []
       resultQueue = []
+      pendingToolById.clear()
       continue
     }
 
@@ -382,13 +393,19 @@ export function parseChatHistory(raw: RawHistoryMessage[]): ParsedChatHistory {
         const call: InlineToolCall & { startedAtMs?: number | null } = {
           id: block.id ?? randomId(),
           tool: block.name ?? "unknown",
-          status: block.isError || block.status === "error" ? "error" : "success",
+          status:
+            block.isError || block.status === "error"
+              ? "error"
+              : block.status === "success"
+                ? "success"
+                : "running",
           input: block.arguments ?? block.input,
           duration: block.duration,
           startedAtMs: rawTimestampMs(item),
         }
         pendingToolCalls.push(call)
         resultQueue.push(call)
+        pendingToolById.set(call.id, call)
 
         if (block.name === "sessions_spawn") {
           const args = (block.input ?? {}) as Record<string, unknown>
@@ -412,10 +429,10 @@ export function parseChatHistory(raw: RawHistoryMessage[]): ParsedChatHistory {
       if (text || pendingToolCalls.length > 0) {
         const last = messages.at(-1)
         if (last?.role === "assistant") {
-          if (text) last.text = last.text ? `${last.text}\n\n${text}` : text
+          if (text) last.text = mergeAssistantText(last.text, text)
           last.toolCalls = [...(last.toolCalls ?? []), ...pendingToolCalls]
           last.messageId = messageId(item)
-          last.createdAt = item.createdAt ?? last.createdAt
+          last.createdAt = createdAtIso(item) ?? last.createdAt
           last.model = item.model ?? last.model
           last.usage = item.usage ?? last.usage
           last.stopReason = item.stopReason ?? last.stopReason
@@ -424,7 +441,7 @@ export function parseChatHistory(raw: RawHistoryMessage[]): ParsedChatHistory {
             messageId: messageId(item),
             role: "assistant",
             text,
-            createdAt: item.createdAt,
+            createdAt: createdAtIso(item),
             model: item.model,
             usage: item.usage,
             stopReason: item.stopReason,
@@ -438,8 +455,13 @@ export function parseChatHistory(raw: RawHistoryMessage[]): ParsedChatHistory {
     }
 
     if (role === "tool" || role === "tool_result" || role === "toolResult") {
-      const matched = resultQueue.shift()
+      const matched = item.toolCallId
+        ? pendingToolById.get(item.toolCallId) ??
+          resultQueue.find((call) => call.id === item.toolCallId)
+        : resultQueue.shift()
       if (!matched) continue
+      pendingToolById.delete(matched.id)
+      resultQueue = resultQueue.filter((call) => call.id !== matched.id)
       const resultText = toolResultText(item)
       matched.status = inferToolStatus(item, resultText)
       matched.resultText = resultText || matched.resultText
